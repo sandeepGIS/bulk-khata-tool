@@ -30,10 +30,10 @@ function processKhata(){
   currentDistrict=getValue(text,/जनपद\s*:\s*([^\n]+)/);
   currentKhata=getValue(text,/खाता\s*संख्या\s*:\s*(\d+)/);
 
-  /* ✅ OWNER EXTRACTION (stable version) */
-  const ownerLines=text.split("\n");
+  /* OWNER EXTRACTION */
+  const lines=text.split("\n");
 
-  ownerLines.forEach(line=>{
+  lines.forEach(line=>{
     if(line.includes("/") && !line.includes("खसरा") && !line.includes("क्षेत्रफल")){
       
       let parts=line.split("/");
@@ -51,11 +51,10 @@ function processKhata(){
     }
   });
 
-  /* ✅ KHASRA EXTRACTION */
+  /* KHASRA EXTRACTION */
   const allNumbers=[...text.matchAll(/\b\d{3,5}\b/g)].map(m=>m[0]);
   const areaList=[...text.matchAll(/\b0\.\d{3,4}\b/g)].map(m=>m[0]);
 
-  /* Remove fasli years */
   const khasraList=allNumbers.filter(n=>n.length>=3 && !n.startsWith("14"));
 
   const finalLength=Math.min(khasraList.length,areaList.length);
@@ -79,8 +78,6 @@ function processKhata(){
   document.getElementById("khasraCount").innerText=currentKhasra.length;
 }
 
-
-/* ✅ RELATIONAL EXPORT */
 function exportExcel(){
 
   if(currentKhasra.length===0){
