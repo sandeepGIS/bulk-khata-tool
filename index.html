@@ -1,187 +1,117 @@
 <!DOCTYPE html>
-<html>
+<html lang="hi">
 <head>
 <meta charset="UTF-8">
-<title>Bulk Khata Processing System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Khata Relational GIS System</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style>
 body{
-font-family:Arial;
-margin:20px;
-background:#f4f6f9;
+  font-family: Arial, sans-serif;
+  background:#f4f6f9;
+  margin:0;
+}
+header{
+  background:#0b4d8c;
+  color:white;
+  padding:20px;
+  text-align:center;
+}
+.container{
+  padding:20px;
 }
 textarea{
-width:100%;
-height:180px;
-padding:10px;
+  width:100%;
+  height:250px;
+  padding:10px;
 }
 button{
-padding:10px 15px;
-margin:5px 0;
-cursor:pointer;
-background:#198754;
-color:white;
-border:none;
+  padding:10px 15px;
+  margin:10px 5px 10px 0;
+  border:none;
+  cursor:pointer;
+  color:white;
+  border-radius:5px;
 }
-button:hover{
-background:#146c43;
+.process{ background:#087a63; }
+.export{ background:#1565c0; }
+.clear{ background:#b42318; }
+.count{
+  margin-top:15px;
+  font-weight:bold;
 }
 table{
-border-collapse:collapse;
-width:100%;
-margin-top:20px;
-background:white;
-font-size:13px;
+  width:100%;
+  border-collapse:collapse;
+  margin-top:20px;
+  background:white;
 }
 th,td{
-border:1px solid #ccc;
-padding:6px;
+  border:1px solid #ccc;
+  padding:6px;
+  font-size:13px;
 }
 th{
-background:#e9ecef;
-}
-input[type=file]{
-margin:10px 0;
+  background:#e9ecef;
 }
 </style>
 </head>
 
 <body>
 
-<h2>Bulk Khata Processing Tool</h2>
+<header>
+<h2>Khata Relational GIS Processing System</h2>
+</header>
 
-<h3>Option 1: Upload Multiple Text Files</h3>
-<input type="file" id="fileInput" multiple accept=".txt">
+<div class="container">
 
-<h3>Option 2: Paste Multiple Khata Records (Separate by ---)</h3>
-<textarea id="bulkText"></textarea>
+<textarea id="inputText" placeholder="Paste full Khata text here..."></textarea>
 
 <br>
-<button onclick="processBulk()">Process Records</button>
-<button onclick="exportCSV()">Export CSV</button>
+<button class="process" onclick="processKhata()">Process</button>
+<button class="export" onclick="exportExcel()">Export Relational Excel</button>
+<button class="clear" onclick="clearAll()">Clear</button>
 
-<table id="outputTable">
+<div class="count">
+Total Owners: <span id="ownerCount">0</span> |
+Total Khasra: <span id="khasraCount">0</span>
+</div>
+
+<table id="previewTable">
 <thead>
 <tr>
-<th>Khata</th>
-<th>Village_H</th>
-<th>Village_E</th>
 <th>Khasra</th>
 <th>Area</th>
-<th>Owner_Hin</th>
-<th>Owner_Eng</th>
-<th>Father_Husband_H</th>
-<th>Father_Husband_Eng</th>
-<th>Original_Owner_Record</th>
-<th>Land_Type</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 
+</div>
+
 <script>
 
-function transliterate(text){
-return text.replace(/ा/g,"a")
-.replace(/ि/g,"i")
-.replace(/ी/g,"ee")
-.replace(/ु/g,"u")
-.replace(/ू/g,"oo")
-.replace(/े/g,"e")
-.replace(/ो/g,"o")
-.replace(/स/g,"s")
-.replace(/र/g,"r")
-.replace(/म/g,"m")
-.replace(/न/g,"n")
-.replace(/क/g,"k")
-.replace(/ल/g,"l")
-.replace(/ब/g,"b")
-.replace(/ह/g,"h")
-.replace(/द/g,"d")
-.replace(/त/g,"t")
-.replace(/ज/g,"j")
-.replace(/ग/g,"g");
+/* Global relational storage */
+let currentVillage="";
+let currentTehsil="";
+let currentDistrict="";
+let currentKhata="";
+let currentOwners=[];
+let currentKhasra=[];
+
+function getValue(text, regex){
+  const match=text.match(regex);
+  return match?match[1].trim():"";
 }
 
-function extractAndInsert(text){
+function processKhata(){
 
-let table = document.getElementById("outputTable").getElementsByTagName('tbody')[0];
+  const text=document.getElementById("inputText").value;
 
-let villageMatch = text.match(/ग्राम का नाम\s*:\s*([^\n]+)/);
-let village_h = villageMatch ? villageMatch[1].trim() : "";
-let village_e = transliterate(village_h);
+  document.querySelector("#previewTable tbody").innerHTML="";
+  currentOwners=[];
+  currentKhasra=[];
 
-let khataMatch = text.match(/खाता संख्या\s*:\s*(\d+)/);
-let khata = khataMatch ? khataMatch[1] : "";
-
-let khasraMatches = [...text.matchAll(/\b\d{3,4}\b/g)];
-let areaMatches = [...text.matchAll(/0\.\d+/g)];
-let ownerMatches = [...text.matchAll(/([^\n\/]+)\s*\/\s*([^\n\/]+)/g)];
-
-for(let i=0;i<ownerMatches.length;i++){
-
-let owner_h = ownerMatches[i][1].trim();
-let father_h = ownerMatches[i][2].trim();
-let owner_e = transliterate(owner_h);
-let father_e = transliterate(father_h);
-let khasra = khasraMatches[i] ? khasraMatches[i][0] : "";
-let area = areaMatches[i] ? areaMatches[i][0] : "";
-
-let row = table.insertRow();
-row.innerHTML = `
-<td>${khata}</td>
-<td>${village_h}</td>
-<td>${village_e}</td>
-<td>${khasra}</td>
-<td>${area}</td>
-<td>${owner_h}</td>
-<td>${owner_e}</td>
-<td>${father_h}</td>
-<td>${father_e}</td>
-<td>${owner_h} / ${father_h} / नि. ग्राम</td>
-<td>Private</td>
-`;
-}
-
-}
-
-function processBulk(){
-
-let textAreaData = document.getElementById("bulkText").value;
-
-if(textAreaData.trim()!=""){
-let records = textAreaData.split("---");
-records.forEach(r=>extractAndInsert(r));
-}
-
-let files = document.getElementById("fileInput").files;
-for(let i=0;i<files.length;i++){
-let reader = new FileReader();
-reader.onload=function(e){
-extractAndInsert(e.target.result);
-}
-reader.readAsText(files[i]);
-}
-
-}
-
-function exportCSV(){
-let csv=[];
-let rows=document.querySelectorAll("table tr");
-for(let i=0;i<rows.length;i++){
-let row=[],cols=rows[i].querySelectorAll("td,th");
-for(let j=0;j<cols.length;j++)
-row.push(cols[j].innerText);
-csv.push(row.join(","));
-}
-let blob=new Blob([csv.join("\n")],{type:"text/csv"});
-let link=document.createElement("a");
-link.href=window.URL.createObjectURL(blob);
-link.download="bulk_khata_output.csv";
-link.click();
-}
-
-</script>
-
-</body>
-</html>
+  currentVillage=getValue(text,/ग्राम\s*का\s*नाम\s*:\s*([^\n]+)/);
