@@ -1,3 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Khata GIS Relational System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+body{font-family:Arial;margin:0;background:#f4f6f9;}
+header{background:#0b4d8c;color:white;padding:20px;text-align:center;}
+.container{padding:20px;}
+textarea{width:100%;height:200px;padding:10px;}
+button{padding:10px 15px;margin:10px 5px 10px 0;border:none;color:white;border-radius:5px;cursor:pointer;}
+.process{background:#087a63;}
+.export{background:#1565c0;}
+.clear{background:#b42318;}
+.count{margin-top:15px;font-weight:bold;}
+table{width:100%;border-collapse:collapse;margin-top:20px;background:white;}
+th,td{border:1px solid #ccc;padding:6px;font-size:13px;}
+th{background:#e9ecef;}
+</style>
+</head>
+
+<body>
+
+<header>
+<h2>Khata Relational GIS System</h2>
+</header>
+
+<div class="container">
+
+<textarea id="inputText" placeholder="Paste full khata text here..."></textarea>
+<br>
+<button class="process" onclick="processKhata()">Process</button>
+<button class="export" onclick="exportExcel()">Export Excel</button>
+<button class="clear" onclick="clearAll()">Clear</button>
+
+<div class="count">
+Owners: <span id="ownerCount">0</span> |
+Khasra: <span id="khasraCount">0</span>
+</div>
+
+<table id="previewTable">
+<thead>
+<tr><th>Khasra</th><th>Area</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+
+</div>
+
 <script>
 
 let currentVillage="";
@@ -15,11 +66,7 @@ function getValue(text, regex){
 function processKhata(){
 
   const text=document.getElementById("inputText").value;
-
-  if(!text){
-    alert("Please paste Khata text first.");
-    return;
-  }
+  if(!text){ alert("Paste khata text first"); return; }
 
   document.querySelector("#previewTable tbody").innerHTML="";
   currentOwners=[];
@@ -31,46 +78,33 @@ function processKhata(){
   currentKhata=getValue(text,/खाता\s*संख्या\s*:\s*(\d+)/);
 
   /* OWNER EXTRACTION */
-  const lines=text.split("\n");
-
-  lines.forEach(line=>{
-    if(line.includes("/") && !line.includes("खसरा") && !line.includes("क्षेत्रफल")){
-      
+  text.split("\n").forEach(line=>{
+    if(line.includes("/") && !line.includes("खसरा")){
       let parts=line.split("/");
       if(parts.length>=2){
         let owner=parts[0].trim();
         let father=parts[1].replace(/[0-9].*/,"").trim();
-
         if(owner.length>2){
-          currentOwners.push({
-            owner:owner,
-            father:father
-          });
+          currentOwners.push({owner,father});
         }
       }
     }
   });
 
   /* KHASRA EXTRACTION */
-  const allNumbers=[...text.matchAll(/\b\d{3,5}\b/g)].map(m=>m[0]);
-  const areaList=[...text.matchAll(/\b0\.\d{3,4}\b/g)].map(m=>m[0]);
+  const khasraList=[...text.matchAll(/\b\d{3,5}\b/g)]
+    .map(m=>m[0])
+    .filter(n=>!n.startsWith("14"));
 
-  const khasraList=allNumbers.filter(n=>n.length>=3 && !n.startsWith("14"));
+  const areaList=[...text.matchAll(/\b0\.\d{3,4}\b/g)]
+    .map(m=>m[0]);
 
   const finalLength=Math.min(khasraList.length,areaList.length);
 
   for(let i=0;i<finalLength;i++){
-
-    currentKhasra.push({
-      number:khasraList[i],
-      area:areaList[i]
-    });
-
+    currentKhasra.push({number:khasraList[i],area:areaList[i]});
     let row=document.createElement("tr");
-    row.innerHTML=`
-      <td>${khasraList[i]}</td>
-      <td>${areaList[i]}</td>
-    `;
+    row.innerHTML=`<td>${khasraList[i]}</td><td>${areaList[i]}</td>`;
     document.querySelector("#previewTable tbody").appendChild(row);
   }
 
@@ -81,46 +115,43 @@ function processKhata(){
 function exportExcel(){
 
   if(currentKhasra.length===0){
-    alert("Please process khata first.");
+    alert("Process khata first.");
     return;
   }
 
   const workbook=XLSX.utils.book_new();
 
-  const khataData=[{
-    Khata_No:currentKhata,
-    Village:currentVillage,
-    Tehsil:currentTehsil,
-    District:currentDistrict
-  }];
   XLSX.utils.book_append_sheet(workbook,
-    XLSX.utils.json_to_sheet(khataData),
+    XLSX.utils.json_to_sheet([{
+      Khata_No:currentKhata,
+      Village:currentVillage,
+      Tehsil:currentTehsil,
+      District:currentDistrict
+    }]),
     "KHATA"
   );
 
-  const ownerData=currentOwners.map((o,i)=>({
-    Owner_ID:i+1,
-    Khata_No:currentKhata,
-    Owner_Name:o.owner,
-    Father_Name:o.father
-  }));
   XLSX.utils.book_append_sheet(workbook,
-    XLSX.utils.json_to_sheet(ownerData),
+    XLSX.utils.json_to_sheet(currentOwners.map((o,i)=>({
+      Owner_ID:i+1,
+      Khata_No:currentKhata,
+      Owner:o.owner,
+      Father:o.father
+    }))),
     "OWNERS"
   );
 
-  const khasraData=currentKhasra.map((k,i)=>({
-    Khasra_ID:i+1,
-    Khata_No:currentKhata,
-    Khasra_No:k.number,
-    Area:k.area
-  }));
   XLSX.utils.book_append_sheet(workbook,
-    XLSX.utils.json_to_sheet(khasraData),
+    XLSX.utils.json_to_sheet(currentKhasra.map((k,i)=>({
+      Khasra_ID:i+1,
+      Khata_No:currentKhata,
+      Khasra:k.number,
+      Area:k.area
+    }))),
     "KHASRA"
   );
 
-  XLSX.writeFile(workbook,"Khata_Relational_GIS_Format.xlsx");
+  XLSX.writeFile(workbook,"Khata_Relational.xlsx");
 }
 
 function clearAll(){
@@ -133,3 +164,6 @@ function clearAll(){
 }
 
 </script>
+
+</body>
+</html>
